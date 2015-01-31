@@ -16,7 +16,7 @@ similar to those of my board. You can also simply use the cpu.vhd and connect yo
 
 RTL-Diagram of the CPU-Entity:
 
-![RTL-Diagram](doc/cpu.jpg "CPU-RTL")
+![RTL-Diagram](doc/rtl.jpg "CPU-RTL")
 
 ## Instruction Set
 
