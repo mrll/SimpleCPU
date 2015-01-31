@@ -11,7 +11,7 @@ I wrote this code for a computer architecture course at my university.
 
 RTL-Diagram of the CPU-Entity:
 
-![RTL-Diagram](doc/cpu.jpg "CPU-RTL")
+![RTL-Diagram](doc/rtl.jpg "CPU-RTL")
 
 ## Instruction Set
 
