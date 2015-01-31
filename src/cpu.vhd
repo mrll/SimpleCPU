@@ -13,64 +13,76 @@ use ieee.std_logic_1164.all;
 use work.all;
 
 entity cpu is
-	port(
-		clk      	: in  std_logic;
+    port(
+        clk              : in  std_logic;                    -- Clock input
+        reset            : in  std_logic;                    -- Reset input
 
-		reset    	: in  std_logic;
+        inEnter          : in  std_logic;                    -- Enter key
+        keyIn            : in  std_logic_vector(7 downto 0); -- Value input
 
-		in_enter	: in  std_logic;
-		key_in  	: in  std_logic_vector(7 downto 0);
+        ledWait          : out std_logic;                    -- Wait for enter
+        ledOut           : out std_logic_vector(7 downto 0); -- Value output
 
-		led_wait	: out std_logic;
-		led_out		: out std_logic_vector(7 downto 0)
-	);
+        resetOut         : out std_logic;                    -- Reset indicator
+        clkOut           : out std_logic                     -- Clock indicator
+    );
 end cpu;
 
 architecture rtl of cpu is
+    -- Data Wires
+    signal address : std_logic_vector(4 downto 0);       -- PC to MEM
+    signal memOut : std_logic_vector(7 downto 0);        -- MEM to IR, ALU & ACC
+    signal accOut : std_logic_vector(7 downto 0);        -- ACC to MEM, ALU & OUT_LEDS
+    signal opCode : std_logic_vector(2 downto 0);        -- IR to CTRL
+    signal irOut  : std_logic_vector(4 downto 0);        -- IR to CTRL & PC
+    signal aluOut : std_logic_vector(7 downto 0);        -- ALU to ACC
 
-	-- Data Wires
-	signal address : std_logic_vector(4 downto 0); -- PC to MEM
-	signal mem_out : std_logic_vector(7 downto 0); -- MEM to IR, ALU & ACC
-	signal acc_out : std_logic_vector(7 downto 0); -- ACC to MEM, ALU & OUT_LEDS
-	signal op_code : std_logic_vector(2 downto 0); -- IR to CTRL
-	signal ir_out  : std_logic_vector(4 downto 0); -- IR to CTRL & PC
-	signal alu_out : std_logic_vector(7 downto 0); -- ALU to ACC
+    -- Control Wires
+    signal pcSel  : std_logic_vector(1 downto 0);        -- PC input address selection
+    signal pcLoad : std_logic;                           -- PC enable
+    signal adrSel : std_logic;                           -- PC output address selection
 
-	-- Control Wires
-	signal pc_sel  : std_logic_vector(1 downto 0);     -- PC input address selection
-	signal pc_load : std_logic;                        -- PC enable
-	signal adr_sel : std_logic;                        -- PC output address selection
+    signal irLoad : std_logic;                           -- IR enable
 
-	signal ir_load : std_logic;                        -- IR enable
+    signal accSel   : std_logic_vector(1 downto 0);      -- ACC input data selection
+    signal accLoad  : std_logic;                         -- ACC enable
+    signal posFlag  : std_logic;                         -- ACC data is positive flag
+    signal zeroFlag : std_logic;                         -- ACC data is zero flag
 
-	signal acc_sel   : std_logic_vector(1 downto 0);   -- ACC input data selection
-	signal acc_load  : std_logic;                      -- ACC enable
-	signal pos_flag  : std_logic;                      -- ACC data is positive flag
-	signal zero_flag : std_logic;                      -- ACC data is zero flag
-
-	signal alu_op : std_logic_vector(1 downto 0);      -- ALU operation selection
-
-	signal mem_write : std_logic;                      -- MEM write enable
-
-	signal output_enable : std_logic;                  -- LED output enable
+    signal aluOp : std_logic_vector(1 downto 0);         -- ALU operation selection
+    signal memWrite : std_logic;                         -- MEM write enable
+    signal outputEnable : std_logic;                     -- LED output enable
 
 begin
 
-	CTRL	: control_unit port map(clk, reset, in_enter, pos_flag, zero_flag, op_code, ir_out, pc_sel, pc_load, adr_sel, ir_load, acc_sel, acc_load, alu_op, mem_write, output_enable, led_wait);
-	MEM 	: memory_unit port map(clk, reset, mem_write, address, acc_out, mem_out);
-	ALU 	: arithmetic_logic_unit port map(alu_op, mem_out, acc_out, alu_out);
-	ACC 	: accumulator port map(clk, acc_load, acc_sel, key_in, mem_out, alu_out, acc_out, pos_flag, zero_flag);
-	IR  	: instruction_register port map(clk, ir_load, mem_out, op_code, ir_out);
-	PC		: program_counter port map(clk, pc_load, pc_sel, adr_sel, ir_out, address);
+    -- The following commands connecting the signals, inputs & outputs between
+    -- all single components of the cpu
+    --
+    CTRL : control_unit port map(clk, reset, inEnter, posFlag, zeroFlag, opCode,
+                                 irOut, pcSel, pcLoad, adrSel, irLoad, accSel,
+                                 accLoad, aluOp, memWrite, outputEnable, ledWait);
+    MEM  : memory_unit port map(clk, reset, memWrite, address, accOut, memOut);
+    ALU  : arithmetic_logic_unit port map(aluOp, memOut, accOut, aluOut);
+    ACC  : accumulator port map(clk, accLoad, accSel, keyIn, memOut, aluOut,
+                                accOut, posFlag, zeroFlag);
+    IR   : instruction_register port map(clk, irLoad, memOut, opCode, irOut);
+    PC   : program_counter port map(clk, pcLoad, pcSel, adrSel, irOut, address);
 
-	led_out(0) <= acc_out(0) and output_enable;
-	led_out(1) <= acc_out(1) and output_enable;
-	led_out(2) <= acc_out(2) and output_enable;
-	led_out(3) <= acc_out(3) and output_enable;
+    -- Setting the value output if output is enabled
+    --
+    ledOut(0) <= accOut(0) and outputEnable;
+    ledOut(1) <= accOut(1) and outputEnable;
+    ledOut(2) <= accOut(2) and outputEnable;
+    ledOut(3) <= accOut(3) and outputEnable;
 
-	led_out(4) <= acc_out(4) and output_enable;
-	led_out(5) <= acc_out(5) and output_enable;
-	led_out(6) <= acc_out(6) and output_enable;
-	led_out(7) <= acc_out(7) and output_enable;
+    ledOut(4) <= accOut(4) and outputEnable;
+    ledOut(5) <= accOut(5) and outputEnable;
+    ledOut(6) <= accOut(6) and outputEnable;
+    ledOut(7) <= accOut(7) and outputEnable;
+
+    -- Setting the clock and reset indicators (added for debugging)
+    --
+    resetOut <= reset;
+    clkOut <= clk;
 
 end;

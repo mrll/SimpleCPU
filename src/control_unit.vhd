@@ -12,386 +12,403 @@ library ieee;
 use ieee.std_logic_1164.all;
 
 entity control_unit is
-	port(
-		-- Control Input --
-		clk           : in  std_logic;
-		reset         : in  std_logic;
-		in_enter      : in  std_logic;
-		pos_flag      : in  std_logic;
-		zero_flag     : in  std_logic;
+    port(
+        -- Control Input --
+        clk          : in  std_logic;
+        reset        : in  std_logic;
+        inEnter      : in  std_logic;
+        posFlag      : in  std_logic;
+        zeroFlag     : in  std_logic;
 
-		-- Data Input --
-		op_code       : in  std_logic_vector(2 downto 0);
-		ir_out        : in  std_logic_vector(4 downto 0);
+        -- Data Input --
+        opCode       : in  std_logic_vector(2 downto 0);
+        irOut        : in  std_logic_vector(4 downto 0);
 
-		-- Program Counter Output  --
-		pc_sel        : out std_logic_vector(1 downto 0);
-		pc_load       : out std_logic;
-		adr_sel       : out std_logic;
+        -- Program Counter Output  --
+        pcSel        : out std_logic_vector(1 downto 0);
+        pcLoad       : out std_logic;
+        adrSel       : out std_logic;
 
-		-- Instruction Register Output  --
-		ir_load       : out std_logic;
+        -- Instruction Register Output  --
+        irLoad       : out std_logic;
 
-		-- Accumulator Output  --
-		acc_sel       : out std_logic_vector(1 downto 0);
-		acc_load      : out std_logic;
+        -- Accumulator Output  --
+        accSel       : out std_logic_vector(1 downto 0);
+        accLoad      : out std_logic;
 
-		-- Arithmetic Logic Unit Output  --
-		alu_op        : out std_logic_vector(1 downto 0);
+        -- Arithmetic Logic Unit Output  --
+        aluOp        : out std_logic_vector(1 downto 0);
 
-		-- Memory Output  --
-		mem_write     : out std_logic;
+        -- Memory Output  --
+        memWrite     : out std_logic;
 
-		-- Generic Output  --
-		output_enable : out std_logic;
-		led_wait	  : out std_logic
-	);
+        -- Generic Output  --
+        outputEnable : out std_logic;
+        ledWait      : out std_logic
+    );
 end control_unit;
 
+-- -------------------------------------------- --
+-- Control Flow                                 --
+-- -------------------------------------------- --
+--                                              --
+--  1. state      <- nextState on clock         --
+--  2. output     <- based on state             --
+--  3.               repeat 1 & 2               --
+--                                              --
+--  x. nextState  <- when input gets changed    --
+-- -------------------------------------------- --
+
 architecture rtl of control_unit is
-	type state_type is (
-		RESET_STATE,                    -- Reset CPU
+    type state_type is (
+        RESET_STATE,                    -- Reset CPU
 
-		CTRL_LOAD_IR,                   -- New Instruction from IR
+        CTRL_LOAD_IR,                   -- New Instruction from IR
 
-		MEM_STORE,                      -- Write Memory In
-		ACC_MEM,                        -- Acc load Memory
+        MEM_STORE,                      -- Write Memory
+        ACC_MEM,                        -- Acc load Memory
 
-		ACC_ALU_ADD,                    -- Acc load ALU with ALU-Add Operation
-		ACC_ALU_SUB,                    -- Acc load ALU with ALU-Sub Operation
-		ACC_ALU_NAND,                   -- Acc load ALU with ALU-Nand Operation
+        ACC_ALU_ADD,                    -- Acc load ALU with ALU-Add Operation
+        ACC_ALU_SUB,                    -- Acc load ALU with ALU-Sub Operation
+        ACC_ALU_NAND,                   -- Acc load ALU with ALU-Nand Operation
 
-		ACC_IN_ENTER,                   -- Acc load key_in when in_enter
+        ACC_inEnter,                    -- Acc load key_in when inEnter is set
 
-		JUMP_PC_MEM,                    -- PC Jump to Address
+        JUMP_PC_MEM,                    -- PC Jump to Address in Memory
 
-		NOP_PC,                         -- Update PC
-		NOP_OUT,                        -- Enable Output while not in_enter
-		NOP_MEM,                        -- Update MEM
-		NOP_IR                          -- Update IR
+        NOP_PC,                         -- Update PC
+        NOP_OUT,                        -- Enable Output while not inEnter
+        NOP_MEM,                        -- Update MEM
+        NOP_IR                          -- Update IR
 );
-	signal state      : state_type := RESET_STATE;
-	signal next_state : state_type := RESET_STATE;
+    signal state         : state_type := RESET_STATE;
+    signal nextState     : state_type := RESET_STATE;
 
 begin
-	CLOCK_PROCESS : process(clk, reset)
-	begin
-		if reset = '1' then
-			state <= RESET_STATE;
-		elsif rising_edge(clk) then
-			state <= next_state;
-		end if;
-	end process;
+    CLOCK_PROCESS : process(clk, reset)
+    begin
+        if reset = '1' then
+            state <= RESET_STATE;
+        elsif rising_edge(clk) then
+            state <= nextState;
+        end if;
+    end process;
 
-	INPUT_STATE_PROCESS : process(state, in_enter, op_code, ir_out, zero_flag, pos_flag)
-	begin
-		next_state <= state;	-- prevents inferred latches
+    -- This process updates the next state based on the incoming signals
+    --
+    INPUT_STATE_PROCESS : process(state, inEnter, opCode, irOut, zeroFlag, posFlag)
+    begin
+        nextState <= state;     -- prevents inferred latches,
+                                -- because nextState needs to be set even if
+                                -- the following case is going to set it
 
-		case (state) is
+        case (state) is
 
-			-- On reset pc is set address 0x00 so no nop_pc is needed
-			when RESET_STATE =>
-				next_state <= NOP_MEM;
+            -- On reset pc is set to address 0x00 so no nop_pc is needed
+            when RESET_STATE =>
+                nextState <= NOP_MEM;
 
-			-- Next State depends on inputs
-			when CTRL_LOAD_IR =>
-				-- Going through op_codes
-				case (op_code) is
-					when "000" =>       -- LOAD
-						next_state <= ACC_MEM;
-					when "001" =>
-						next_state <= MEM_STORE;
-					when "010" =>       -- ADD
-						next_state <= ACC_ALU_ADD;
-					when "011" =>       -- SUB
-						next_state <= ACC_ALU_SUB;
+            -- Next State depends on inputs
+            when CTRL_LOAD_IR =>
+                -- Going through opCodes
+                case (opCode) is
+                    when "000" =>       -- LOAD
+                        nextState <= ACC_MEM;
+                    when "001" =>
+                        nextState <= MEM_STORE;
+                    when "010" =>       -- ADD
+                        nextState <= ACC_ALU_ADD;
+                    when "011" =>       -- SUB
+                        nextState <= ACC_ALU_SUB;
 
-					when "100" =>       				-- NAND, IN, OUT
-						-- Depends on ir_out data
-						if ir_out = "00000" then 		-- IN
-							next_state <= ACC_IN_ENTER;
-						elsif ir_out = "00001" then 	-- OUT
-							next_state <= NOP_OUT;
-						else            				-- NAND
-							next_state <= ACC_ALU_NAND;
-						end if;
+                    when "100" =>                       -- NAND, IN, OUT
+                        -- Depends on irOut data
+                        if irOut = "00000" then         -- IN
+                            nextState <= ACC_inEnter;
+                        elsif irOut = "00001" then      -- OUT
+                            nextState <= NOP_OUT;
+                        else                            -- NAND
+                            nextState <= ACC_ALU_NAND;
+                        end if;
 
-					when "101" =>       -- JUMP ZERO
-						if zero_flag = '1' then
-							next_state <= JUMP_PC_MEM;
-						else
-							next_state <= NOP_PC;
-						end if;
-					when "110" =>       -- JUMP POSITIVE
-						if pos_flag = '1' then
-							next_state <= JUMP_PC_MEM;
-						else
-							next_state <= NOP_PC;
-						end if;
-					when others =>      -- JUMP ALWAYS
-						next_state <= JUMP_PC_MEM;
-				end case;
+                    when "101" =>       -- JUMP ZERO
+                        if zeroFlag = '1' then
+                            nextState <= JUMP_PC_MEM;
+                        else
+                            nextState <= NOP_PC;
+                        end if;
+                    when "110" =>       -- JUMP POSITIVE
+                        if posFlag = '1' then
+                            nextState <= JUMP_PC_MEM;
+                        else
+                            nextState <= NOP_PC;
+                        end if;
+                    when others =>      -- JUMP ALWAYS
+                        nextState <= JUMP_PC_MEM;
+                end case;
 
-			when ACC_IN_ENTER | NOP_OUT =>
-				 if in_enter = '1' then
-                    next_state <= NOP_PC;
+            when ACC_inEnter | NOP_OUT =>
+                 if inEnter = '1' then
+                    nextState <= NOP_PC;
                  else
-                    next_state <= state;
+                    nextState <= state;
                  end if;
 
-			when NOP_PC =>
-				next_state <= NOP_MEM;
-			-- JUMP_PC_MEM skips NOP_PC and NOP_MEM
-			when JUMP_PC_MEM | NOP_MEM =>
-				next_state <= NOP_IR;
-			when NOP_IR =>
-				next_state <= CTRL_LOAD_IR;
+            when NOP_PC =>
+                nextState <= NOP_MEM;
+            -- JUMP_PC_MEM skips NOP_PC and NOP_MEM
+            when JUMP_PC_MEM | NOP_MEM =>
+                nextState <= NOP_IR;
+            when NOP_IR =>
+                nextState <= CTRL_LOAD_IR;
 
-			-- Next State is always NOP_PC
-			when others =>
-				next_state <= NOP_PC;
+            -- Next State is always NOP_PC
+            when others =>
+                nextState <= NOP_PC;
 
-		end case;
-	end process;
+        end case;
+    end process;
 
-	STATE_OUTPUT_PROCESS : process(state)
-	begin
-		case (state) is
-			when RESET_STATE =>         -- Reset CPU
-				-- PC
-				pc_sel        <= "10";
-				pc_load       <= '1';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+    -- This process sets the output based on the current state
+    --
+    STATE_OUTPUT_PROCESS : process(state)
+    begin
+        case (state) is
+            when RESET_STATE =>         -- Reset CPU
+                -- PC
+                pcSel        <= "10";
+                pcLoad       <= '1';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when CTRL_LOAD_IR =>        -- New Instruction from IR
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '1';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when CTRL_LOAD_IR =>        -- New Instruction from IR
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '1';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when MEM_STORE =>           -- Write Memory In
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '1';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "ZZ";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '1';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when MEM_STORE =>           -- Write Memory In
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '1';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "ZZ";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '1';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when ACC_MEM =>             -- Acc load Memory
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "01";
-				acc_load      <= '1';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when ACC_MEM =>             -- Acc load Memory
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "01";
+                accLoad      <= '1';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when ACC_ALU_ADD =>         -- Acc load ALU with ALU-Add Operation
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '1';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when ACC_ALU_ADD =>         -- Acc load ALU with ALU-Add Operation
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '1';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when ACC_ALU_SUB =>         -- Acc load ALU with ALU-Sub Operation
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '1';
-				-- ALU
-				alu_op        <= "01";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when ACC_ALU_SUB =>         -- Acc load ALU with ALU-Sub Operation
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '1';
+                -- ALU
+                aluOp        <= "01";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when ACC_ALU_NAND =>        -- Acc load ALU with ALU-Nand Operation
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '1';
-				-- ALU
-				alu_op        <= "10";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when ACC_ALU_NAND =>        -- Acc load ALU with ALU-Nand Operation
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '1';
+                -- ALU
+                aluOp        <= "10";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when ACC_IN_ENTER =>        -- Acc load key_in when in_enter
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "10";
-				acc_load      <= '1';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '1';
+            when ACC_inEnter =>        -- Acc load key_in when inEnter
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "10";
+                accLoad      <= '1';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '1';
 
-			when JUMP_PC_MEM =>         -- PC Jump to Address
-				-- PC
-				pc_sel        <= "01";
-				pc_load       <= '1';
-				adr_sel       <= '1';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when JUMP_PC_MEM =>         -- PC Jump to Address
+                -- PC
+                pcSel        <= "01";
+                pcLoad       <= '1';
+                adrSel       <= '1';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when NOP_PC =>              -- Update PC
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '1';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when NOP_PC =>              -- Update PC
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '1';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when NOP_OUT =>             -- Enable Output
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				-- GEN
-				output_enable <= '1';
-				led_wait 	  <= '0';
+            when NOP_OUT =>             -- Enable Output
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                -- GEN
+                outputEnable <= '1';
+                ledWait      <= '1';
 
-			when NOP_MEM =>             -- Update MEM
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '0';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
+            when NOP_MEM =>             -- Update MEM
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '0';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
 
-			when others =>              -- Update IR (NOP_IR)
-				-- PC
-				pc_sel        <= "00";
-				pc_load       <= '0';
-				adr_sel       <= '0';
-				-- IR
-				ir_load       <= '1';
-				-- ACC
-				acc_sel       <= "00";
-				acc_load      <= '0';
-				-- ALU
-				alu_op        <= "00";
-				-- MEM
-				mem_write     <= '0';
-				-- GEN
-				output_enable <= '0';
-				led_wait 	  <= '0';
-		end case;
-	end process;
+            when others =>              -- Update IR (NOP_IR)
+                -- PC
+                pcSel        <= "00";
+                pcLoad       <= '0';
+                adrSel       <= '0';
+                -- IR
+                irLoad       <= '1';
+                -- ACC
+                accSel       <= "00";
+                accLoad      <= '0';
+                -- ALU
+                aluOp        <= "00";
+                -- MEM
+                memWrite     <= '0';
+                -- GEN
+                outputEnable <= '0';
+                ledWait      <= '0';
+        end case;
+    end process;
 
 end;

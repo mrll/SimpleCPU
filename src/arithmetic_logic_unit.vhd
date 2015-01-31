@@ -13,25 +13,25 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity arithmetic_logic_unit is
-	port(
-		-- Control Input --
-		alu_op  : in  std_logic_vector(1 downto 0);
-		-- Data Input --
-		mem_out : in  std_logic_vector(7 downto 0);
-		acc_out : in  std_logic_vector(7 downto 0);
-		-- Data Output  --
-		alu_out : out std_logic_vector(7 downto 0)
-	);
+    port(
+        -- Control Input --
+        aluOp      : in  std_logic_vector(1 downto 0);
+        -- Data Input --
+        memOut     : in  std_logic_vector(7 downto 0);
+        accOut     : in  std_logic_vector(7 downto 0);
+        -- Data Output  --
+        aluOut     : out std_logic_vector(7 downto 0)
+    );
 end arithmetic_logic_unit;
 
 architecture rtl of arithmetic_logic_unit is
 begin
 
-	-- Set output based on alu_op
-	with alu_op select alu_out <=
-		std_logic_vector(signed(mem_out) + signed(acc_out)) when "00", -- ADD
-		std_logic_vector(signed(mem_out) - signed(acc_out)) when "01", -- SUB
-		not (mem_out and acc_out) when "10",	-- NAND
-		"00000000" when others;         		-- Not used Operation
+    -- Set output based on aluOp
+    with aluOp select aluOut <=
+        std_logic_vector(signed(memOut) + signed(accOut)) when "00",    -- ADD
+        std_logic_vector(signed(memOut) - signed(accOut)) when "01",    -- SUB
+        not (memOut and accOut) when "10",                              -- NAND
+            "00000000" when others;                                     -- Not used operation
 
 end;
