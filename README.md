@@ -7,6 +7,11 @@ I wrote this code for a computer architecture course at my university.
 
 ---
 
+## Top Level Entity
+
+I use the HC1.vhd as the Top-Level-Entity in the Quartus II IDE with a Cyclone 2 board. The in- and output names are
+similar to those of my board. You can also simply use the cpu.vhd and connect your in- and outputs directly to the CPU.
+
 ## CPU Architecture
 
 RTL-Diagram of the CPU-Entity:
@@ -45,8 +50,8 @@ When starting the CPU or after pressing Reset. It needs a 3 Cycle init-process t
 
 The IN instruction waits until the `in_enter` signal is active. During this time the `led_wait` is active to show you that the CPU needs some input.
 Also the OUT instruction wait for the `ìn_enter` signal to go on. This
-behaviour is made, bacause of the output would disappear to fast with
-the next clock-cycle.
+behaviour is made, because the output would disappear to fast with
+the next clock-cycle (It runs with 5 Hz on my board).
 
 ## Default Program Simulation
 
@@ -56,26 +61,26 @@ The default program is for testing all instructions:
 
 Assembler like Code with the instruction names from the table:
 ```
-0x00 LOAD    0x19    ; Load value of mem-address 25 to acc
-0x01 IN              ; Get Input to Acc
-0x02 STORE   0x18    ; Store acc to mem-address 24
-0x03 IN              ; Get input to Acc
-0x04 STORE   0x17    ; Store acc to mem-address 23
-0x05 ADD     0x18    ; Add Input 1 to Input 2
-0x06 OUT             ; Show result
-0x07 LOAD    0x18    ; Load Input 1
-0x08 SUB     0x17    ; Sub Input 2 from Input 1
-0x09 OUT             ; Show result
-0x0A LOAD    0x18    ; Load Input 1
-0x0B NAND    0x17    ; Nand input 1 with Input 2
-0x0C OUT             ; Show result
-0x0D LOAD    0x1F    ; Load value 0x06 into Acc
-0x0E JPOS    0x12    ; JPos to 0x12
-0x0F OUT             ; Never called
-0x10 J       0x00    ; Jump to program start
-0x11                 ; Never called
-0x12 LOAD    0x19    ; Load value 0x00 to Acc
-0x13 JZ      0x10    ; JZ to 0x10
+LOAD    0x19    ; Load value of mem-address 25 to acc
+IN              ; Get Input to Acc
+STORE   0x18    ; Store acc to mem-address 24
+IN              ; Get input to Acc
+STORE   0x17    ; Store acc to mem-address 23
+ADD     0x18    ; Add Input 1 to Input 2
+OUT             ; Show result
+LOAD    0x18    ; Load Input 1
+SUB     0x17    ; Sub Input 2 from Input 1
+OUT             ; Show result
+LOAD    0x18    ; Load Input 1
+NAND    0x17    ; Nand input 1 with Input 2
+OUT             ; Show result
+LOAD    0x1F    ; Load value 0x06 into Acc
+JPOS    0x12    ; JPos to 0x12
+OUT             ; Never called
+J       0x00    ; Jump to program start
+                ; Never called
+LOAD    0x19    ; Load value 0x00 to Acc
+JZ      0x10    ; JZ to 0x10
 
 ```
 
@@ -130,4 +135,3 @@ Logicsimulation of the program above:
 ## Control Unit: State Machine
 
 ![State Machine](doc/state_machine.jpg "State Machine")
-
