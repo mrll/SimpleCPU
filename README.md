@@ -3,8 +3,6 @@
 
 A simple 8 Bit CPU-Design written in VHDL.
 
-I wrote this code for a computer architecture course at my university.
-
 ---
 
 ## Top Level Entity
